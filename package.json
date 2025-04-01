@@ -1,6 +1,6 @@
 {
   "name": "@anht3889/cucumber-studio-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "MCP (Model Context Protocol) server for Cucumber Studio integration",
   "main": "dist/index.js",
   "bin": {
