@@ -194,7 +194,7 @@ The MCP server can be integrated with AI assistants that support the Model Conte
 ```json
 {
   "mcpServers": {
-    "gitlab": {
+    "cucumber-studio": {
       "command": "npx",
       "args": [
         "-y",
