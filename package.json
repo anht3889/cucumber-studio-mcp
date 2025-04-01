@@ -27,6 +27,17 @@
   ],
   "author": "Anh Tran",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anht3889/cucumber-studio-mcp.git"
+  },
+  "homepage": "https://github.com/anht3889/cucumber-studio-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/anht3889/cucumber-studio-mcp/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.8.0",
     "axios": "^1.6.0",
