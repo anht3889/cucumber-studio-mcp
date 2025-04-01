@@ -1,0 +1,40 @@
+{
+  "name": "@anht3889/cucumber-studio-mcp",
+  "version": "0.1.0",
+  "description": "MCP (Model Context Protocol) server for Cucumber Studio integration",
+  "main": "dist/index.js",
+  "bin": {
+    "cucumber-studio-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "inspect": "tsc && npx @modelcontextprotocol/inspector node -- dist/index.js",
+    "inspect-live": "npx @modelcontextprotocol/inspector npx -- @anht3889/cucumber-studio-mcp",
+    "build": "tsc",
+    "start": "tsc && node dist/index.js",
+    "prepublishOnly": "npm run build",
+    "update": "npm run build && npm version patch && npm publish"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "cucumber-studio",
+    "cucumber",
+    "test-case-management",
+    "ai"
+  ],
+  "author": "Anh Tran",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.8.0",
+    "axios": "^1.6.0",
+    "zod": "^3.22.2",
+    "zod-to-json-schema": "^3.23.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.6.2"
+  }
+} 
