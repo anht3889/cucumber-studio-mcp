@@ -101,7 +101,7 @@ process.on('unhandledRejection', (reason) => {
 // Create the MCP server
 const server = new McpServer({
   name: "cucumber-studio-server",
-  version: "0.6.3"
+  version: "0.1.3"
 });
 
 // Helper function to register tools with common error handling and logging
