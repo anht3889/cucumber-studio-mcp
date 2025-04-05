@@ -34,14 +34,14 @@ export interface ExtendedConfig extends CucumberStudioConfig {
 const LOG_DIR = process.env.CUCUMBER_STUDIO_LOG_DIR || './logs';
 const LOG_FILE = path.join(LOG_DIR, 'cucumber-studio-mcp.log');
 
-// Create log directory if it doesn't exist
+// Ensure log directory exists (synchronous setup is okay at startup)
 try {
   if (!fs.existsSync(LOG_DIR)) {
     fs.mkdirSync(LOG_DIR, { recursive: true });
   }
 } catch (error) {
-  // Fall back to console if we can't create log dir
   console.error('Failed to create log directory:', error);
+  // Allow the application to continue, but logging to file will fail.
 }
 
 // Environment-based configuration
@@ -120,19 +120,28 @@ function parseBoolean(value: string | undefined, defaultValue: boolean): boolean
 // Export the environment-specific configuration
 export const config: ExtendedConfig = getConfigForEnvironment();
 
-// Write message to log file
-function writeToFile(level: string, message: string, args: any[]): void {
+// Asynchronous write message to log file
+async function writeToFile(level: string, message: string, args: any[]): Promise<void> {
   try {
     const timestamp = new Date().toISOString();
     let logMessage = `[${timestamp}] ${level}: ${message}`;
     
     if (args.length > 0) {
-      // Handle objects and arrays by safely stringifying them
       const argsStr = args.map(arg => {
         if (typeof arg === 'object' && arg !== null) {
           try {
-            return JSON.stringify(arg);
+            // Basic cycle detection placeholder - replace with a library for robust handling if needed
+            return JSON.stringify(arg, (key, value) => {
+              if (value instanceof Error) {
+                return { message: value.message, name: value.name }; // Serialize basic error info
+              }
+              return value;
+            });
           } catch (e) {
+            // Handle potential stringification errors (e.g., circular references)
+            if (e instanceof Error && e.message.includes('circular structure')) {
+              return '[Circular Structure]';
+            }
             return '[Object could not be stringified]';
           }
         }
@@ -144,24 +153,36 @@ function writeToFile(level: string, message: string, args: any[]): void {
     
     logMessage += '\n';
     
-    // Append to log file - use synchronous API to avoid interleaving
-    fs.appendFileSync(LOG_FILE, logMessage);
+    // Append to log file asynchronously
+    await fs.promises.appendFile(LOG_FILE, logMessage);
+
   } catch (error) {
-    // Don't use console here to avoid MCP interference
+    // Log errors during logging to stderr only if NOT in MCP mode
+    if (process.env.MCP_PROTOCOL !== 'true') {
+      console.error('Failed to write to log file:', error);
+    }
+    // Avoid infinite loops if logging itself fails.
   }
 }
 
-// Logger function that respects configured log level
+// Logger function that respects configured log level and writes asynchronously
 export function log(level: LogLevel, message: string, ...args: any[]): void {
   if (level <= config.logLevel) {
     const levelName = LogLevel[level];
     
-    // Always write to file first
-    writeToFile(levelName, message, args);
+    // Write to file asynchronously, but don't wait for it (fire and forget)
+    // This prevents logging from blocking the main execution flow.
+    writeToFile(levelName, message, args).catch(err => {
+      // Handle potential errors from the async write operation
+      if (process.env.MCP_PROTOCOL !== 'true') {
+          console.error('Async log write failed:', err);
+      }
+    });
     
-    // Only output to stderr for ERROR level when not in MCP mode
+    // Output ERROR to stderr immediately if not in MCP mode
     if (level === LogLevel.ERROR && process.env.MCP_PROTOCOL !== 'true') {
       const timestamp = new Date().toISOString();
+      // Use console.error directly for immediate critical feedback
       console.error(`[${timestamp}] ERROR:`, message, ...args);
     }
   }

@@ -1,6 +1,7 @@
 // Utility functions for handling MCP tool requests
 
-import { LogLevel, log } from './config.js';
+import { LogLevel, log, config } from './config.js';
+import axios from 'axios';
 
 /**
  * Normalize a tool name by removing prefixes
@@ -13,79 +14,6 @@ export function normalizeToolName(name: string): string {
     }
   }
   return name;
-}
-
-/**
- * Extract parameters from request, handling various formats
- */
-export function extractParameters(request: any): Record<string, any> {
-  const input: Record<string, any> = {};
-  const params = request.params;
-  
-  // Parameters processing priority:
-  // 1. params.parameters (official MCP format)
-  // 2. params.input (alternative format)
-  // 3. params.arguments (legacy format)
-  // 4. direct parameters as fallback
-  
-  // Process params.parameters (preferred MCP format)
-  if (params.parameters && typeof params.parameters === 'object') {
-    Object.assign(input, params.parameters);
-    return input;
-  }
-  
-  // Process params.input
-  if (params.input && typeof params.input === 'object') {
-    Object.assign(input, params.input);
-    return input;
-  }
-  
-  // Process params.arguments
-  if (params.arguments && typeof params.arguments === 'object') {
-    Object.assign(input, params.arguments);
-    return input;
-  }
-  
-  // Process direct parameters as last resort
-  const directParams = ['project_id', 'scenario_id', 'tag_key', 'tag_value', 'include_tags', 
-                        'folder_id', 'tag_id', 'name', 'description', 'definition', 'steps', 'tags'];
-  for (const param of directParams) {
-    if (param in params && typeof params[param] !== 'undefined') {
-      input[param] = params[param];
-    }
-  }
-  
-  return input;
-}
-
-/**
- * Extract project ID from input parameters
- */
-export function extractProjectId(input: Record<string, any>): string | undefined {
-  if (!input || typeof input !== 'object') {
-    return undefined;
-  }
-  
-  // Direct property
-  if ('project_id' in input && typeof input.project_id === 'string') {
-    return input.project_id;
-  }
-  
-  // Case-insensitive property
-  const keys = Object.keys(input);
-  const projectIdKey = keys.find(k => k.toLowerCase() === 'project_id');
-  if (projectIdKey && typeof input[projectIdKey] === 'string') {
-    return input[projectIdKey];
-  }
-  
-  // Nested parameters
-  if ('parameters' in input && typeof input.parameters === 'object' && input.parameters) {
-    if ('project_id' in input.parameters && typeof input.parameters.project_id === 'string') {
-      return input.parameters.project_id;
-    }
-  }
-  
-  return undefined;
 }
 
 /**
@@ -140,63 +68,60 @@ export function createErrorResponse(message: string): any {
  * Handle errors consistently
  */
 export function handleError(error: unknown, context: string): any {
-  // Base error message without sensitive details
-  let errorMessage = `An error occurred while ${context}`;
-  
+  // Base error message
+  let baseMessage = `An error occurred while ${context}`;
+  let detailedMessage = baseMessage; // More detailed message, potentially sanitized
+
   // Log full error details for debugging (server-side only)
-  log(LogLevel.ERROR, `Error in ${context}:`, error);
+  log(LogLevel.ERROR, `Error during ${context}:`, error);
   
   // Extract error message based on error type
   if (error instanceof Error) {
-    // Include only necessary error message without stack trace
-    errorMessage = `Error ${context}: ${error.message}`;
+    detailedMessage = `Error ${context}: ${error.message}`;
     
     // Handle Axios errors specially
-    if ('isAxiosError' in error && (error as any).isAxiosError) {
-      const axiosError = error as any;
+    if (axios.isAxiosError(error)) {
+      const axiosError = error;
       if (axiosError.response) {
-        // Include status code but limit response data exposure
         const status = axiosError.response.status;
-        errorMessage = `API error ${context} (Status: ${status})`;
+        detailedMessage = `API error ${context} (Status: ${status})`;
         
         // Log full response for debugging (server-side only)
         log(LogLevel.ERROR, 'Full API error response:', axiosError.response.data);
         
-        // Include only necessary error details for client
-        if (axiosError.response.data && axiosError.response.data.errors) {
+        // Add specific API error details if available and not sanitized
+        if (axiosError.response.data && axiosError.response.data.errors && !config.sanitizeErrorMessages) {
           try {
-            // Extract API error messages if available
             const apiErrors = axiosError.response.data.errors;
             if (Array.isArray(apiErrors) && apiErrors.length > 0) {
               const apiErrorDetails = apiErrors.map((err: any) => 
                 err.title || err.detail || 'Unknown API error'
               ).join('; ');
-              errorMessage += `: ${apiErrorDetails}`;
+              detailedMessage += `: ${apiErrorDetails}`;
             }
           } catch (e) {
-            // Fall back to status-only error if error processing fails
             log(LogLevel.ERROR, 'Error processing API error details:', e);
           }
         }
       } else if (axiosError.request) {
-        // Network or timeout issue
-        errorMessage = `Network error ${context}: No response received`;
+        detailedMessage = `Network error ${context}: No response received`;
       } else {
-        // Request configuration error
-        errorMessage = `Request configuration error ${context}`;
+        detailedMessage = `Request configuration error during ${context}: ${error.message}`;
       }
     }
   } else if (typeof error === 'string') {
-    errorMessage = `Error ${context}: ${error}`;
+    detailedMessage = `Error ${context}: ${error}`;
   } else if (typeof error === 'object' && error !== null) {
-    // Extract message from unknown object types but avoid exposing internals
     const errObj = error as any;
     if (errObj.message) {
-      errorMessage = `Error ${context}: ${errObj.message}`;
+      detailedMessage = `Error ${context}: ${errObj.message}`;
     }
   }
+
+  // Determine the final message based on sanitize config
+  const finalMessage = config.sanitizeErrorMessages ? baseMessage + ". Check server logs for details." : detailedMessage;
   
-  return createErrorResponse(errorMessage);
+  return createErrorResponse(finalMessage);
 }
 
 /**
